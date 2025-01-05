@@ -1,0 +1,25 @@
+{
+    "recommendations": [
+      // common
+      "eamodio.gitlens",
+      "GitHub.copilot",
+      "GitHub.vscode-pull-request-github",
+      "janisdd.vscode-edit-csv",
+      "mechatroner.rainbow-csv",
+      "mhutchie.git-graph",
+      "MS-CEINTL.vscode-language-pack-ja",
+      "oderwat.indent-rainbow",
+      "usernamehw.errorlens",
+      "PKief.material-icon-theme",
+  
+      // Python
+      "ms-python.black-formatter",
+      "ms-python.flake8",
+      "ms-python.isort",
+      "ms-python.mypy-type-checker",
+      "ms-python.python",
+      "ms-toolsai.jupyter",
+      "njpwerner.autodocstring",
+    ]
+  }
+  

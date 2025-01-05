@@ -1,0 +1,25 @@
+{
+    // common
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "workbench.iconTheme": "material-icon-theme",
+    "editor.cursorSurroundingLines": 100, // カーソルを画面の中心にする
+    "editor.renderWhitespace": "all",
+    "diffEditor.ignoreTrimWhitespace": false,
+  
+    // Python
+    "[python]": {
+      "editor.defaultFormatter": "ms-python.black-formatter",
+      "editor.formatOnSave": true,
+      "editor.codeActionsOnSave": {
+        "source.organizeImports": "explicit"
+      }
+    },
+    "mypy-type-checker.args": ["--config-file=mypy.ini", "--cache-dir=/dev/null"],
+    "mypy-type-checker.importStrategy": "useBundled",
+    "mypy-type-checker.path" : ["mypy"],
+    "black-formatter.importStrategy": "fromEnvironment",
+    "flake8.importStrategy": "useBundled",
+    "flake8.path": ["flake8"],
+    "isort.importStrategy": "fromEnvironment",
+  }
+  
