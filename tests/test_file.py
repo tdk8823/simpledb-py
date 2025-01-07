@@ -45,7 +45,7 @@ class TestPage(unittest.TestCase):
         contents = self.page.contents()
         expected_contents = bytearray(100)
         expected_contents[0:4] = struct.pack(Page.FORMAT, 65536)
-        self.assertEqual(contents, bytes(expected_contents))
+        self.assertEqual(contents, expected_contents)
 
     def test_set_int_out_of_bounds(self) -> None:
         with self.assertRaises(ValueError):
