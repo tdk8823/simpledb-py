@@ -158,3 +158,8 @@ class FileManager:
             f = db_table.open("r+b")
             self._open_files[filename] = f
         return f
+
+    def __del__(self) -> None:
+        for f in self._open_files.values():
+            f.close()
+        self._open_files.clear()
