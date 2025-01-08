@@ -15,11 +15,9 @@
       }
     },
     "mypy-type-checker.args": ["--config-file=mypy.ini", "--cache-dir=/dev/null"],
-    "mypy-type-checker.importStrategy": "useBundled",
-    "mypy-type-checker.path" : ["mypy"],
+    "mypy-type-checker.importStrategy": "fromEnvironment",
     "black-formatter.importStrategy": "fromEnvironment",
-    "flake8.importStrategy": "useBundled",
-    "flake8.path": ["flake8"],
+    "flake8.importStrategy": "fromEnvironment",
     "isort.importStrategy": "fromEnvironment",
   }
   
