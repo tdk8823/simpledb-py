@@ -4,6 +4,7 @@ from pathlib import Path
 from tempfile import TemporaryDirectory
 
 from simpledbpy.file import BlockId, FileManager, Page
+import os
 
 
 class TestBlockId(unittest.TestCase):
