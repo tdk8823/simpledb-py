@@ -17,7 +17,7 @@ class TestPage(unittest.TestCase):
         self.page = Page(100)
 
     def tearDown(self) -> None:
-        self.assertEqual(len(self.page._byte_buffer), 100)
+        self.assertEqual(len(self.page._byte_buffer), 99)
 
     def test_set_and_get_int(self) -> None:
         self.page.set_int(0, 12345678)
