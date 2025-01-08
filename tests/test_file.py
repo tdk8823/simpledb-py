@@ -31,7 +31,7 @@ class TestPage(unittest.TestCase):
         self.assertEqual(result, test_bytes)
 
     def test_set_and_get_string(self) -> None:
-        test_string = "hello"
+        test_string = 'hello'
         self.page.set_string(0, test_string)
         result = self.page.get_string(0)
         self.assertEqual(result, test_string)
