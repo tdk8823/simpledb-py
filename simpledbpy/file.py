@@ -41,9 +41,7 @@ class Page:
     def get_int(self, offset: int) -> int:
         if len(self._byte_buffer) <= offset:
             raise ValueError("Offset is out of bounds")
-        return int(
-            struct.unpack(self.FORMAT, self._byte_buffer[offset : offset + 4])[0]
-        )
+        return int(struct.unpack(self.FORMAT, self._byte_buffer[offset : offset + 4])[0])
 
     def set_int(self, offset: int, value: int) -> None:
         if len(self._byte_buffer) < offset + 4:

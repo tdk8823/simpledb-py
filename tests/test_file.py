@@ -113,9 +113,7 @@ class TestFileManager(unittest.TestCase):
     def test_concurrent_access(self) -> None:
         from concurrent.futures import ThreadPoolExecutor
 
-        def write_and_read_concurrently(
-            block_id: BlockId, data: bytearray
-        ) -> bytearray:
+        def write_and_read_concurrently(block_id: BlockId, data: bytearray) -> bytearray:
             page = Page(self.block_size)
             page.contents()[:] = data
             self.file_manager.write(block_id, page)
@@ -127,10 +125,7 @@ class TestFileManager(unittest.TestCase):
         data = bytearray((i % 256 for i in range(self.block_size)))
 
         with ThreadPoolExecutor(max_workers=10) as executor:
-            futures = [
-                executor.submit(write_and_read_concurrently, block_id, data)
-                for _ in range(10)
-            ]
+            futures = [executor.submit(write_and_read_concurrently, block_id, data) for _ in range(10)]
 
         for future in futures:
             self.assertEqual(future.result(), data)
