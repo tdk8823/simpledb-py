@@ -1,5 +1,9 @@
+import os
 import struct
 from dataclasses import dataclass
+from io import BufferedRandom
+from pathlib import Path
+from threading import Lock
 
 
 @dataclass(frozen=True)
@@ -77,5 +81,85 @@ class Page:
         bytes_per_char = 1
         return 4 + strlen * bytes_per_char
 
-    def contents(self) -> bytes:
-        return bytes(self._byte_buffer)
+    def contents(self) -> bytearray:
+        return self._byte_buffer
+
+
+class FileManager:
+    _db_directory: Path
+    _block_size: int
+    _is_new: bool
+    _open_files: dict[str, BufferedRandom]
+    _lock: Lock
+
+    def __init__(self, db_directory: Path, block_size: int) -> None:
+        self._db_directory = db_directory
+        self._block_size = block_size
+        self._is_new = not db_directory.exists()
+
+        # create the directory if the database is new
+        if self._is_new:
+            db_directory.mkdir(parents=True)
+
+        # remove any leftover temporary tables
+        for file in self._db_directory.iterdir():
+            if file.name.startswith("temp"):
+                file.unlink()
+
+        self._open_files = {}
+        self._lock = Lock()
+
+    def read(self, block_id: BlockId, page: Page) -> None:
+        with self._lock:
+            try:
+                f = self._get_file(block_id.filename)
+                f.seek(block_id.block_number * self._block_size)
+                f.readinto(page.contents())
+            except IOError as e:
+                raise IOError(f"Cannot read block {block_id}") from e
+
+    def write(self, block_id: BlockId, page: Page) -> None:
+        with self._lock:
+            try:
+                f = self._get_file(block_id.filename)
+                f.seek(block_id.block_number * self._block_size)
+                f.write(page.contents())
+                f.flush()
+            except IOError as e:
+                raise IOError(f"Cannot write block {block_id}") from e
+
+    def append(self, filename: str) -> BlockId:
+        with self._lock:
+            new_block_number = self.length(filename)
+            block = BlockId(filename, new_block_number)
+            b = bytearray(self._block_size)
+            try:
+                f = self._get_file(filename)
+                f.seek(new_block_number * self._block_size)
+                f.write(b)
+                f.flush()
+            except IOError as e:
+                raise IOError(f"Cannot append block {block}") from e
+            return block
+
+    def length(self, filename: str) -> int:
+        try:
+            f = self._get_file(filename)
+            return int(f.seek(0, os.SEEK_END) / self._block_size)
+        except IOError as e:
+            raise IOError(f"Cannot access {filename}") from e
+
+    def _get_file(self, filename: str) -> BufferedRandom:
+        f = self._open_files.get(filename)
+        if f is None:
+            db_table = self._db_directory / filename
+            if not db_table.exists():
+                db_table.touch()
+            f = db_table.open("r+b")
+            self._open_files[filename] = f
+        return f
+
+    def __del__(self) -> None:
+        for f in self._open_files.values():
+            f.close()
+        self._open_files.clear()
