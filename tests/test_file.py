@@ -1,7 +1,7 @@
 import struct
 import unittest
-from pathlib import Path
 from tempfile import TemporaryDirectory
+from pathlib import Path
 
 from simpledbpy.file import BlockId, FileManager, Page
 
