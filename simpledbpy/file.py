@@ -263,6 +263,14 @@ class FileManager:
         except IOError as e:
             raise IOError(f"Cannot access {filename}") from e
 
+    @property
+    def block_size(self) -> int:
+        return self._block_size
+
+    @property
+    def is_new(self) -> bool:
+        return self._is_new
+
     def _get_file(self, filename: str) -> BufferedRandom:
         """Get a file object
 
