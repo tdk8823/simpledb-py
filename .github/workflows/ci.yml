@@ -34,4 +34,4 @@ jobs:
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: tdk8823/simpledb-python
+          slug: tdk8823/simpledb-py
