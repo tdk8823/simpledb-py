@@ -30,8 +30,10 @@ jobs:
       - name: Report coverage
         run: poetry run coverage report -m
 
-      - name: Upload coverage reports to Codecov
-        uses: codecov/codecov-action@v5
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v2
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          slug: tdk8823/simpledb-py
+          files: ./coverage.xml
+          flags: unittests
+          name: codecov-umbrella
