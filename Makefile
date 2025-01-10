@@ -1,6 +1,6 @@
 test:
 	@echo "Running all tests..."
-	@poetry run python -m unittest discover -s tests
+	@poetry run coverage run -m unittest discover -s tests
 
 flake8:
 	@echo "Running flake8..."
