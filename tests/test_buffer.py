@@ -120,7 +120,3 @@ class TestBufferManager(unittest.TestCase):
         new_block = MagicMock(spec=BlockId)
         with self.assertRaises(BufferAbortError):
             self.buffer_manager.pin(new_block)
-
-
-if __name__ == "__main__":
-    unittest.main()

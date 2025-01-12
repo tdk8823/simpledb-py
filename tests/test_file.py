@@ -129,7 +129,3 @@ class TestFileManager(unittest.TestCase):
 
         for future in futures:
             self.assertEqual(future.result(), data)
-
-
-if __name__ == "__main__":
-    unittest.main()
