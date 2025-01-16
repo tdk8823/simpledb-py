@@ -1,3 +1,5 @@
+from threading import Lock
+
 from simpledbpy.buffer import Buffer, BufferManager
 from simpledbpy.file import BlockId, FileManager
 from simpledbpy.log import LogManager
@@ -74,6 +76,7 @@ class Transaction:
     END_OF_FILE = -1
 
     _next_txnum: int = 0
+    _lock = Lock()
     _recovery_manager: RecoveryManager
     _concurrency_manager: ConcurrencyManager
     _buffer_manager: BufferManager
@@ -255,5 +258,6 @@ class Transaction:
         return self._buffer_manager.available
 
     def _next_tx_number(self) -> int:
-        self._next_txnum += 1
-        return self._next_txnum
+        with Transaction._lock:
+            Transaction._next_txnum += 1
+            return self._next_txnum
