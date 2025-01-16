@@ -17,8 +17,6 @@ class TestRecoveryManager(unittest.TestCase):
         self.log_manager = LogManager(self.file_manager, "simpledb.log")
         self.num_buffers = 8
         self.buffer_manager = BufferManager(self.file_manager, self.log_manager, self.num_buffers)
-        # self.block_id0 = BlockId("testfile", 0)
-        # self.block_id1 = BlockId("testfile", 1)
 
     def test_basic_usage(self) -> None:
         """Expected Output:
