@@ -2,11 +2,14 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from enum import Enum
+from typing import TYPE_CHECKING
 
 from simpledbpy.buffer import Buffer, BufferManager
 from simpledbpy.file import BlockId, Page
 from simpledbpy.log import LogManager
-from simpledbpy.tx.transaction import Transaction
+
+if TYPE_CHECKING:
+    from simpledbpy.tx.transaction import Transaction
 
 
 class LogType(Enum):
