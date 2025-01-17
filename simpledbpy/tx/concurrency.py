@@ -16,6 +16,13 @@ class LockTable:
     When the last lock on a block is unlocked, then all transactions are removed from the wait list and rescheduled.
     If one of those transactions discovers that the lock it is waiting for is still locked,
     it will place itself back on the wait list.
+
+    Attributes:
+        _locks (Dict[BlockId, int]): The locks held on each block.
+        The positive integer value represents the number of slocks held on that block.
+        if the value is -1, then an xlock is held on that block.
+        _cv (Condition): The condition variable for the lock table.
+
     """
 
     MAX_TIME = 10
@@ -81,12 +88,12 @@ class LockTable:
         Args:
             block_id (BlockId): The block to be unlocked.
         """
-        val = self._get_lock_val(block_id)
-        if val > 1:
-            self._locks[block_id] = val - 1
-        else:
-            self._locks.pop(block_id)
-            with self._cv:
+        with self._cv:
+            val = self._get_lock_val(block_id)
+            if val > 1:
+                self._locks[block_id] = val - 1
+            else:
+                del self._locks[block_id]
                 self._cv.notify_all()
 
     def _has_xlock(self, block_id: BlockId) -> bool:
