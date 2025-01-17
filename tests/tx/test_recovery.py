@@ -19,19 +19,6 @@ class TestRecoveryManager(unittest.TestCase):
         self.buffer_manager = BufferManager(self.file_manager, self.log_manager, self.num_buffers)
 
     def test_basic_usage(self) -> None:
-        """Expected Output:
-        Transaction 1 committed
-        Transaction 2 committed
-        After Initialization:
-            0 0 4 4 8 8 12 12 16 16 20 20 abc def
-        After Modification:
-            100 100 104 104 108 108 112 112 116 116 120 120 uvw xyz
-        Transaction 3 rolled back
-        After Rollback:
-            0 100 4 104 8 108 12 112 16 116 20 120 abc xyz
-        After Recovery:
-            0 0 4 4 8 8 12 12 16 16 20 20 abc def
-        """
         self._initiate()
         self._modify()
         self._recover()
@@ -54,7 +41,23 @@ class TestRecoveryManager(unittest.TestCase):
         tx2.set_string(block_id1, 30, "def", False)
         tx1.commit()
         tx2.commit()
-        self._print_values("After Initialization:")
+
+        # After Initialization
+        block_id0_contents = self._get_block_contents(block_id0)
+        block_id1_contents = self._get_block_contents(block_id1)
+        self.assertEqual(block_id0_contents, "0 4 8 12 16 20 abc")
+        self.assertEqual(block_id1_contents, "0 4 8 12 16 20 def")
+
+    def _get_block_contents(self, block_id: BlockId) -> str:
+        page = Page(self.file_manager.block_size)
+        self.file_manager.read(block_id, page)
+        contents = ""
+        position = 0
+        for _ in range(6):
+            contents += f"{page.get_int(position)} "
+            position += 4
+        contents += f"{page.get_string(30)}"
+        return contents
 
     def _modify(self) -> None:
         tx3 = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
@@ -74,10 +77,20 @@ class TestRecoveryManager(unittest.TestCase):
         tx4.set_string(block_id1, 30, "xyz", True)
         self.buffer_manager.flush_all(3)
         self.buffer_manager.flush_all(4)
-        self._print_values("After Modification:")
+
+        # After Modification
+        block_id0_contents = self._get_block_contents(block_id0)
+        block_id1_contents = self._get_block_contents(block_id1)
+        self.assertEqual(block_id0_contents, "100 104 108 112 116 120 uvw")
+        self.assertEqual(block_id1_contents, "100 104 108 112 116 120 xyz")
 
         tx3.rollback()
-        self._print_values("After Rollback:")
+
+        # After Rollback
+        block_id0_contents = self._get_block_contents(block_id0)
+        block_id1_contents = self._get_block_contents(block_id1)
+        self.assertEqual(block_id0_contents, "0 4 8 12 16 20 abc")
+        self.assertEqual(block_id1_contents, "100 104 108 112 116 120 xyz")
 
         # assume tx3 and tx4 are flushed to disk, but not committed.
         tx3._concurrency_manager.release()
@@ -86,25 +99,16 @@ class TestRecoveryManager(unittest.TestCase):
     def _recover(self) -> None:
         tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
         tx.recover()
-        self._print_values("After Recovery:")
 
-    def _print_values(self, message: str) -> None:
-        response = f"{message}\n    "
-        page0 = Page(self.file_manager.block_size)
-        page1 = Page(self.file_manager.block_size)
+        # After Recovery
         block_id0 = BlockId("testfile", 0)
         block_id1 = BlockId("testfile", 1)
-        self.file_manager.read(block_id0, page0)
-        self.file_manager.read(block_id1, page1)
-        position = 0
-        for _ in range(6):
-            response += f"{page0.get_int(position)} "
-            response += f"{page1.get_int(position)} "
-            position += 4  # Integer.BYTES
+        block_id0_contents = self._get_block_contents(block_id0)
+        block_id1_contents = self._get_block_contents(block_id1)
+        self.assertEqual(block_id0_contents, "0 4 8 12 16 20 abc")
+        self.assertEqual(block_id1_contents, "0 4 8 12 16 20 def")
 
-        response += f"{page0.get_string(30)} "
-        response += f"{page1.get_string(30)} "
-        print(response)
+        tx.commit()
 
     def tearDown(self) -> None:
         self.tmp_dir.cleanup()
