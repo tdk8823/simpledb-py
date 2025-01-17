@@ -19,19 +19,6 @@ class TestTransaction(unittest.TestCase):
         self.buffer_manager = BufferManager(self.file_manager, self.log_manager, self.num_buffers)
 
     def test_basic_usage(self) -> None:
-        """
-        Expected Output:
-            Transaction 1 committed
-            Initial value at location 80 = 1
-            Initial value at location 40 = one
-            Transaction 2 committed
-            New value at location 80 = 2
-            New value at location 40 = one!
-            Pre-rollback value at location 80 = 9999
-            Transaction 3 rolled back
-            Post-rollback value at location 80 = 2
-            Transaction 4 committed
-        """
         tx1 = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
         block_id = BlockId("testfile", 1)
         tx1.pin(block_id)
@@ -45,8 +32,8 @@ class TestTransaction(unittest.TestCase):
         tx2.pin(block_id)
         int_val = tx2.get_int(block_id, 80)
         string_val = tx2.get_string(block_id, 40)
-        print(f"Initial value at location 80 = {int_val}")
-        print(f"Initial value at location 40 = {string_val}")
+        self.assertEqual(int_val, 1)
+        self.assertEqual(string_val, "one")
 
         new_int_val = int_val + 1
         new_string_val = string_val + "!"
@@ -56,16 +43,16 @@ class TestTransaction(unittest.TestCase):
 
         tx3 = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
         tx3.pin(block_id)
-        print(f"New value at location 80 = {tx3.get_int(block_id, 80)}")
-        print(f"New value at location 40 = {tx3.get_string(block_id, 40)}")
+        assert tx3.get_int(block_id, 80) == 2
+        assert tx3.get_string(block_id, 40) == "one!"
 
         tx3.set_int(block_id, 80, 9999, True)
-        print(f"Pre-rollback value at location 80 = {tx3.get_int(block_id, 80)}")
+        assert tx3.get_int(block_id, 80) == 9999
         tx3.rollback()
 
         tx4 = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
         tx4.pin(block_id)
-        print(f"Post-rollback value at location 80 = {tx4.get_int(block_id, 80)}")
+        assert tx4.get_int(block_id, 80) == 2
         tx4.commit()
 
     def tearDown(self) -> None:
