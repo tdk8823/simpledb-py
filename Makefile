@@ -1,6 +1,11 @@
+# Run tests separately to avoid class variable pollution
 test:
 	@echo "Running all tests..."
-	@poetry run coverage run -m unittest discover -s tests
+	@find tests -name "test_*.py" | while read testfile; do \
+		poetry run coverage run --parallel-mode -m unittest "$$testfile"; \
+	done
+	@poetry run coverage combine
+	@poetry run coverage report -m
 
 flake8:
 	@echo "Running flake8..."
