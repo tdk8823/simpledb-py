@@ -87,17 +87,17 @@ class TestFileManager(unittest.TestCase):
         self.tmp_dir.cleanup()
 
     def test_append_and_length(self) -> None:
-        filename = "testfile"
-        initial_length = self.file_manager.length(filename)
+        file_name = "testfile"
+        initial_length = self.file_manager.length(file_name)
         self.assertEqual(initial_length, 0)
 
-        self.file_manager.append(filename)
-        length_after_append = self.file_manager.length(filename)
+        self.file_manager.append(file_name)
+        length_after_append = self.file_manager.length(file_name)
         self.assertEqual(length_after_append, 1)
 
     def test_write_and_read(self) -> None:
-        filename = "testfile"
-        block_id = self.file_manager.append(filename)
+        file_name = "testfile"
+        block_id = self.file_manager.append(file_name)
 
         page = Page(self.block_size)
         page.set_int(0, 12345678)

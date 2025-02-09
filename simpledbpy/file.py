@@ -8,11 +8,11 @@ from threading import Lock
 
 @dataclass(frozen=True)
 class BlockId:
-    filename: str
+    file_name: str
     block_number: int
 
     def __str__(self) -> str:
-        return f"[file {self.filename}, block {self.block_number}]"
+        return f"[file {self.file_name}, block {self.block_number}]"
 
 
 class Page:
@@ -195,7 +195,7 @@ class FileManager:
         """
         with self._lock:
             try:
-                f = self._get_file(block_id.filename)
+                f = self._get_file(block_id.file_name)
                 f.seek(block_id.block_number * self._block_size)
                 f.readinto(page.contents())
             except IOError as e:
@@ -213,18 +213,18 @@ class FileManager:
         """
         with self._lock:
             try:
-                f = self._get_file(block_id.filename)
+                f = self._get_file(block_id.file_name)
                 f.seek(block_id.block_number * self._block_size)
                 f.write(page.contents())
                 f.flush()
             except IOError as e:
                 raise IOError(f"Cannot write block {block_id}") from e
 
-    def append(self, filename: str) -> BlockId:
+    def append(self, file_name: str) -> BlockId:
         """Append a block to a file
 
         Args:
-            filename (str): The name of the file
+            file_name (str): The name of the file
 
         Raises:
             IOError: If the block cannot be appended
@@ -233,11 +233,11 @@ class FileManager:
             BlockId: The block that was appended
         """
         with self._lock:
-            new_block_number = self.length(filename)
-            block = BlockId(filename, new_block_number)
+            new_block_number = self.length(file_name)
+            block = BlockId(file_name, new_block_number)
             b = bytearray(self._block_size)
             try:
-                f = self._get_file(filename)
+                f = self._get_file(file_name)
                 f.seek(new_block_number * self._block_size)
                 f.write(b)
                 f.flush()
@@ -245,11 +245,11 @@ class FileManager:
                 raise IOError(f"Cannot append block {block}") from e
             return block
 
-    def length(self, filename: str) -> int:
+    def length(self, file_name: str) -> int:
         """Get the number of blocks in a file
 
         Args:
-            filename (str): The name of the file
+            file_name (str): The name of the file
 
         Raises:
             IOError: If the file cannot be accessed
@@ -258,10 +258,10 @@ class FileManager:
             int: The number of blocks in the file
         """
         try:
-            f = self._get_file(filename)
+            f = self._get_file(file_name)
             return int(f.seek(0, os.SEEK_END) / self._block_size)
         except IOError as e:
-            raise IOError(f"Cannot access {filename}") from e
+            raise IOError(f"Cannot access {file_name}") from e
 
     @property
     def block_size(self) -> int:
@@ -271,22 +271,22 @@ class FileManager:
     def is_new(self) -> bool:
         return self._is_new
 
-    def _get_file(self, filename: str) -> BufferedRandom:
+    def _get_file(self, file_name: str) -> BufferedRandom:
         """Get a file object
 
         Args:
-            filename (str): The name of the file
+            file_name (str): The name of the file
 
         Returns:
             BufferedRandom: The file object
         """
-        f = self._open_files.get(filename)
+        f = self._open_files.get(file_name)
         if f is None:
-            db_table = self._db_directory / filename
+            db_table = self._db_directory / file_name
             if not db_table.exists():
                 db_table.touch()
             f = db_table.open("r+b")
-            self._open_files[filename] = f
+            self._open_files[file_name] = f
         return f
 
     def __del__(self) -> None:

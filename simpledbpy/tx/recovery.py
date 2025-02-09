@@ -273,18 +273,18 @@ class SetIntRecord(LogRecord):
             page (Page): the page containing the log values.
             The format of the log record in the page is as follows:
                 0: the transaction id
-                4: filename
-                4 + filename.length: block number
-                8 + filename.length: offset
-                12 + filename.length: the previous integer value
+                4: file_name
+                4 + file_name.length: block number
+                8 + file_name.length: offset
+                12 + file_name.length: the previous integer value
         """
         txnum_position = 4  # Integer.BYTES
         self._txnum = page.get_int(txnum_position)
-        filename_position = txnum_position + 4  # Integer.BYTES
-        filename = page.get_string(filename_position)
-        block_number_position = filename_position + Page.max_length(len(filename))
+        file_name_position = txnum_position + 4  # Integer.BYTES
+        file_name = page.get_string(file_name_position)
+        block_number_position = file_name_position + Page.max_length(len(file_name))
         block_number = page.get_int(block_number_position)
-        self._block_id = BlockId(filename, block_number)
+        self._block_id = BlockId(file_name, block_number)
         offset_position = block_number_position + 4  # Integer.BYTES
         self._offset = page.get_int(offset_position)
         value_position = offset_position + 4  # Integer.BYTES
@@ -313,7 +313,7 @@ class SetIntRecord(LogRecord):
     @staticmethod
     def write_to_log(log_manager: LogManager, txnum: int, block_id: BlockId, offset: int, value: int) -> int:
         """A static method to write a setInt record to the log.
-        This log record contains the SETINT operator, followed by the transaction id, the filename, number,
+        This log record contains the SETINT operator, followed by the transaction id, the file_name, number,
         and offset of the modified block, and the previous integer value at that offset.
 
         Args:
@@ -327,15 +327,15 @@ class SetIntRecord(LogRecord):
             int: the LSN of the last log value
         """
         txnum_position = 4  # Integer.BYTES
-        filename_position = txnum_position + 4  # Integer.BYTES
-        block_number_position = filename_position + Page.max_length(len(block_id.filename))
+        file_name_position = txnum_position + 4  # Integer.BYTES
+        block_number_position = file_name_position + Page.max_length(len(block_id.file_name))
         offset_position = block_number_position + 4  # Integer.BYTES
         value_position = offset_position + 4  # Integer.BYTES
         record_size = value_position + 4  # Integer.BYTES
         page = Page(record_size)
         page.set_int(0, LogType.SETINT.value)
         page.set_int(txnum_position, txnum)
-        page.set_string(filename_position, block_id.filename)
+        page.set_string(file_name_position, block_id.file_name)
         page.set_int(block_number_position, block_id.block_number)
         page.set_int(offset_position, offset)
         page.set_int(value_position, value)
@@ -355,18 +355,18 @@ class SetStringRecord(LogRecord):
             page (Page): the page containing the log values.
             The format of the log record in the page is as follows:
                 0: the transaction id
-                4: filename
-                4 + filename.length: block number
-                8 + filename.length: offset
-                12 + filename.length: the previous string value
+                4: file_name
+                4 + file_name.length: block number
+                8 + file_name.length: offset
+                12 + file_name.length: the previous string value
         """
         txnum_position = 4  # Integer.BYTES
         self._txnum = page.get_int(txnum_position)
-        filename_position = txnum_position + 4
-        filename = page.get_string(filename_position)
-        block_number_position = filename_position + Page.max_length(len(filename))
+        file_name_position = txnum_position + 4
+        file_name = page.get_string(file_name_position)
+        block_number_position = file_name_position + Page.max_length(len(file_name))
         block_number = page.get_int(block_number_position)
-        self._block_id = BlockId(filename, block_number)
+        self._block_id = BlockId(file_name, block_number)
         offset_position = block_number_position + 4  # Integer.BYTES
         self._offset = page.get_int(offset_position)
         value_position = offset_position + 4  # Integer.BYTES
@@ -395,7 +395,7 @@ class SetStringRecord(LogRecord):
     @staticmethod
     def write_to_log(log_manager: LogManager, txnum: int, block_id: BlockId, offset: int, value: str) -> int:
         """A static method to write a setInt record to the log.
-        This log record contains the SETINT operator, followed by the transaction id, the filename, number,
+        This log record contains the SETINT operator, followed by the transaction id, the file_name, number,
         and offset of the modified block, and the previous integer value at that offset.
 
         Args:
@@ -409,15 +409,15 @@ class SetStringRecord(LogRecord):
             int: the LSN of the last log value
         """
         txnum_position = 4  # Integer.BYTES
-        filename_position = txnum_position + 4  # Integer.BYTES
-        block_number_position = filename_position + Page.max_length(len(block_id.filename))
+        file_name_position = txnum_position + 4  # Integer.BYTES
+        block_number_position = file_name_position + Page.max_length(len(block_id.file_name))
         offset_position = block_number_position + 4  # Integer.BYTES
         value_position = offset_position + 4  # Integer.BYTES
         record_size = value_position + Page.max_length(len(value))
         page = Page(record_size)
         page.set_int(0, LogType.SETSTRING.value)
         page.set_int(txnum_position, txnum)
-        page.set_string(filename_position, block_id.filename)
+        page.set_string(file_name_position, block_id.file_name)
         page.set_int(block_number_position, block_id.block_number)
         page.set_int(offset_position, offset)
         page.set_string(value_position, value)

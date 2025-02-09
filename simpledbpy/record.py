@@ -332,16 +332,16 @@ class RecordPage:
 class TableScan(UpdateScan):
     _tx: Transaction
     _layout: Layout
-    _filename: str
+    _file_name: str
     _current_slot: int
     _record_page: Optional[RecordPage]
 
     def __init__(self, tx: Transaction, table_name: str, layout: Layout) -> None:
         self._tx = tx
         self._layout = layout
-        self._filename = table_name + ".tbl"
+        self._file_name = table_name + ".tbl"
         self._record_page = None
-        if tx.size(self._filename) == 0:
+        if tx.size(self._file_name) == 0:
             self._move_to_new_block()
         else:
             self._move_to_block(0)
@@ -410,7 +410,7 @@ class TableScan(UpdateScan):
 
     def move_to_rid(self, rid: RID) -> None:
         self.close()
-        block_id = BlockId(self._filename, rid.block_number)
+        block_id = BlockId(self._file_name, rid.block_number)
         self._record_page = RecordPage(self._tx, block_id, self._layout)
         self._current_slot = rid.slot
 
@@ -420,17 +420,17 @@ class TableScan(UpdateScan):
 
     def _move_to_block(self, block_number: int) -> None:
         self.close()
-        block_id = BlockId(self._filename, block_number)
+        block_id = BlockId(self._file_name, block_number)
         self._record_page = RecordPage(self._tx, block_id, self._layout)
         self._current_slot = -1
 
     def _move_to_new_block(self) -> None:
         self.close()
-        block_id = self._tx.append(self._filename)
+        block_id = self._tx.append(self._file_name)
         self._record_page = RecordPage(self._tx, block_id, self._layout)
         self._record_page.format()
         self._current_slot = -1
 
     def _at_last_block(self) -> bool:
         assert self._record_page is not None
-        return self._record_page.block_id.block_number == self._tx.size(self._filename) - 1
+        return self._record_page.block_id.block_number == self._tx.size(self._file_name) - 1

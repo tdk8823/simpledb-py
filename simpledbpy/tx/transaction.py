@@ -220,34 +220,34 @@ class Transaction:
         page.set_string(offset, value)
         buffer.set_modified(self._txnum, lsn)
 
-    def size(self, filename: str) -> int:
+    def size(self, file_name: str) -> int:
         """Return the number of blocks in the specified file.
         This method first obtains an SLock on the "end of the file",
         before asking the file manager to return the file size.
 
         Args:
-            filename (str):
+            file_name (str):
 
         Returns:
             int: _description_
         """
-        dummy_block = BlockId(filename, self.END_OF_FILE)
+        dummy_block = BlockId(file_name, self.END_OF_FILE)
         self._concurrency_manager.slock(dummy_block)
-        return self._file_manager.length(filename)
+        return self._file_manager.length(file_name)
 
-    def append(self, filename: str) -> BlockId:
+    def append(self, file_name: str) -> BlockId:
         """Append a new block to the end of the specified file and returns a reference to it.
         This method first obtains an XLock on the "end of the file", before performing the append.
 
         Args:
-            filename (str): the name of the file
+            file_name (str): the name of the file
 
         Returns:
             BlockId: a reference to the newly-created disk block
         """
-        dummy_block = BlockId(filename, self.END_OF_FILE)
+        dummy_block = BlockId(file_name, self.END_OF_FILE)
         self._concurrency_manager.xlock(dummy_block)
-        return self._file_manager.append(filename)
+        return self._file_manager.append(file_name)
 
     @property
     def block_size(self) -> int:

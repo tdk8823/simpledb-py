@@ -38,7 +38,7 @@ class LogIterator:
         """
         if self._has_next():
             if self._current_position == self._file_manager.block_size:
-                self._block_id = BlockId(self._block_id.filename, self._block_id.block_number - 1)
+                self._block_id = BlockId(self._block_id.file_name, self._block_id.block_number - 1)
                 self._move_to_block(self._block_id)
             log_record = self._page.get_bytes(self._current_position)
             self._current_position += len(log_record) + 4  # Assuming `Integer.BYTES` is 4

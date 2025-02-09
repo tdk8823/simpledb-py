@@ -102,7 +102,7 @@ class TestBufferManager(unittest.TestCase):
         buffers = []
         for i in range(self.num_buffers):
             block_id = MagicMock(spec=BlockId)
-            block_id.filename = "testfile"
+            block_id.file_name = "testfile"
             block_id.block_number = i
             buffers.append(self.buffer_manager.pin(block_id))
         for i, buffer in enumerate(buffers):
@@ -114,7 +114,7 @@ class TestBufferManager(unittest.TestCase):
     def test_pin_when_all_buffers_busy(self) -> None:
         blocks = [MagicMock(spec=BlockId) for _ in range(self.num_buffers)]
         for i, block in enumerate(blocks):
-            block.filename = "testfile"
+            block.file_name = "testfile"
             block.block_number = i
             self.buffer_manager.pin(block)
         new_block = MagicMock(spec=BlockId)
