@@ -96,3 +96,16 @@ class TableManager:
                 offsets[field_name] = offset
         field_catalog.close()
         return Layout(schema, offsets, slot_size)
+
+
+class MetadataManager:
+    _table_manager: TableManager
+
+    def __init__(self, is_new: bool, tx: Transaction) -> None:
+        self._table_manager = TableManager(is_new, tx)
+
+    def create_table(self, table_name: str, schema: Schema, tx: Transaction) -> None:
+        self._table_manager.create_table(table_name, schema, tx)
+
+    def get_layout(self, table_name: str, tx: Transaction) -> Layout:
+        return self._table_manager.get_layout(table_name, tx)
