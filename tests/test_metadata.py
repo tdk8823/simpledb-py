@@ -64,6 +64,12 @@ class TestMetadataManager(unittest.TestCase):
         self.assertEqual(1 + num_records // 3, stat_info.distinct_values("A"))  # dummy value
         self.assertEqual(1 + num_records // 3, stat_info.distinct_values("B"))  # dummy value
 
+        # test view metadata
+        view_def = "SELECT B FROM MyTable WHERE A = 1"
+        metadata_manager.create_view("viewA", view_def, tx)
+        view_def_from_metadata_manager = metadata_manager.get_view_def("viewA", tx)
+        self.assertEqual(view_def, view_def_from_metadata_manager)
+
         # test index metadata
         metadata_manager.create_index("indexA", "MyTable", "A", tx)
         metadata_manager.create_index("indexB", "MyTable", "B", tx)
