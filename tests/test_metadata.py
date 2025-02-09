@@ -1,3 +1,5 @@
+import math
+import random
 import unittest
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -6,7 +8,7 @@ from simpledbpy.buffer import BufferManager
 from simpledbpy.file import FileManager
 from simpledbpy.log import LogManager
 from simpledbpy.metadata import MetadataManager
-from simpledbpy.record import Schema, Types
+from simpledbpy.record import Schema, TableScan, Types
 from simpledbpy.tx.transaction import Transaction
 
 
@@ -44,6 +46,23 @@ class TestMetadataManager(unittest.TestCase):
                 self.assertEqual(9, schema_from_metadata_manager.length(field))
             else:
                 self.fail("Unknown field")
+
+        # test stat metadata
+        num_records = 50
+        table_scan = TableScan(tx, "MyTable", layout)
+        for _ in range(num_records):
+            table_scan.insert()
+            int_value = round(random.random() * 50)
+            string_value = f"rec{int_value}"
+            table_scan.set_int("A", int_value)
+            table_scan.set_string("B", string_value)
+        stat_info = metadata_manager.get_stat_info("MyTable", layout, tx)
+        records_per_block = self.block_size // layout.slot_size
+        blocks_accessed = math.ceil(num_records / records_per_block)
+        self.assertEqual(num_records, stat_info.records_output)
+        self.assertEqual(blocks_accessed, stat_info.blocks_accessed)
+        self.assertEqual(1 + num_records // 3, stat_info.distinct_values("A"))  # dummy value
+        self.assertEqual(1 + num_records // 3, stat_info.distinct_values("B"))  # dummy value
 
         tx.commit()
 
