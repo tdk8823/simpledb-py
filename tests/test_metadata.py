@@ -64,6 +64,21 @@ class TestMetadataManager(unittest.TestCase):
         self.assertEqual(1 + num_records // 3, stat_info.distinct_values("A"))  # dummy value
         self.assertEqual(1 + num_records // 3, stat_info.distinct_values("B"))  # dummy value
 
+        # test index metadata
+        metadata_manager.create_index("indexA", "MyTable", "A", tx)
+        metadata_manager.create_index("indexB", "MyTable", "B", tx)
+        index_map = metadata_manager.get_index_info("MyTable", tx)
+
+        index_info = index_map["A"]
+        self.assertEqual(2, index_info.records_output)
+        self.assertEqual(1, index_info.distinct_values("A"))
+        self.assertGreater(index_info.distinct_values("B"), 1)
+
+        index_info = index_map["B"]
+        self.assertEqual(2, index_info.records_output)
+        self.assertEqual(1, index_info.distinct_values("B"))
+        self.assertGreater(index_info.distinct_values("A"), 1)
+
         tx.commit()
 
     def tearDown(self) -> None:
