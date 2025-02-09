@@ -1,5 +1,5 @@
 from threading import Lock
-from typing import Dict
+from typing import Dict, Optional
 
 from simpledbpy.index import HashIndex, Index
 from simpledbpy.record import Layout, Schema, TableScan, Types
@@ -374,13 +374,48 @@ class IndexManager:
         return result
 
 
+class ViewManager:
+    MAX_VIEWDEF = 100
+
+    _table_manager: TableManager
+
+    def __init__(self, is_new: bool, table_manager: TableManager, tx: Transaction) -> None:
+        self._table_manager = table_manager
+        if is_new:
+            schema = Schema()
+            schema.add_string_field("viewname", TableManager.MAX_NAME)
+            schema.add_string_field("viewdef", self.MAX_VIEWDEF)
+            table_manager.create_table("viewcat", schema, tx)
+
+    def create_view(self, view_name: str, view_def: str, tx: Transaction) -> None:
+        layout = self._table_manager.get_layout("viewcat", tx)
+        table_scan = TableScan(tx, "viewcat", layout)
+        table_scan.insert()
+        table_scan.set_string("viewname", view_name)
+        table_scan.set_string("viewdef", view_def)
+        table_scan.close()
+
+    def get_view_def(self, view_name: str, tx: Transaction) -> Optional[str]:
+        result = None
+        layout = self._table_manager.get_layout("viewcat", tx)
+        table_scan = TableScan(tx, "viewcat", layout)
+        while table_scan.next():
+            if table_scan.get_string("viewname") == view_name:
+                result = table_scan.get_string("viewdef")
+                break
+        table_scan.close()
+        return result
+
+
 class MetadataManager:
     _table_manager: TableManager
+    _view_manager: ViewManager
     _stat_manager: StatManager
     _index_manager: IndexManager
 
     def __init__(self, is_new: bool, tx: Transaction) -> None:
         self._table_manager = TableManager(is_new, tx)
+        self._view_manager = ViewManager(is_new, self._table_manager, tx)
         self._stat_manager = StatManager(self._table_manager, tx)
         self._index_manager = IndexManager(is_new, self._table_manager, self._stat_manager, tx)
 
@@ -389,6 +424,12 @@ class MetadataManager:
 
     def get_layout(self, table_name: str, tx: Transaction) -> Layout:
         return self._table_manager.get_layout(table_name, tx)
+
+    def create_view(self, view_name: str, view_def: str, tx: Transaction) -> None:
+        self._view_manager.create_view(view_name, view_def, tx)
+
+    def get_view_def(self, view_name: str, tx: Transaction) -> Optional[str]:
+        return self._view_manager.get_view_def(view_name, tx)
 
     def create_index(self, index_name: str, table_name: str, field_name: str, tx: Transaction) -> None:
         self._index_manager.create_index(index_name, table_name, field_name, tx)
