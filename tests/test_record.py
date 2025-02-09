@@ -6,7 +6,7 @@ from tempfile import TemporaryDirectory
 from simpledbpy.buffer import BufferManager
 from simpledbpy.file import FileManager
 from simpledbpy.log import LogManager
-from simpledbpy.record import Layout, RecordPage, Schema
+from simpledbpy.record import Layout, RecordPage, Schema, TableScan
 from simpledbpy.tx.transaction import Transaction
 
 
@@ -59,13 +59,11 @@ class TestRecordPage(unittest.TestCase):
             slot = record_page.next_after(slot)
 
         # test delete records less than 25
-        count = 0
         slot = record_page.next_after(-1)
         while slot >= 0:
             int_value = record_page.get_int(slot, "A")
             string_value = record_page.get_string(slot, "B")
             if int_value < 25:
-                count += 1
                 record_page.delete(slot)
             slot = record_page.next_after(slot)
         slot = record_page.next_after(-1)
@@ -75,6 +73,58 @@ class TestRecordPage(unittest.TestCase):
             slot = record_page.next_after(slot)
 
         tx.unpin(block_id)
+        tx.commit()
+
+    def tearDown(self) -> None:
+        self.tmp_dir.cleanup()
+
+
+class TestTableScan(unittest.TestCase):
+    def setUp(self) -> None:
+        self.tmp_dir = TemporaryDirectory()
+        self.db_directory = Path(self.tmp_dir.name)
+        self.block_size = 400
+        self.file_manager = FileManager(self.db_directory, self.block_size)
+        self.log_manager = LogManager(self.file_manager, "simpledb.log")
+        self.num_buffers = 8
+        self.buffer_manager = BufferManager(self.file_manager, self.log_manager, self.num_buffers)
+
+    def test_basic_usage(self) -> None:
+        tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+        schema = Schema()
+        schema.add_int_field("A")
+        schema.add_string_field("B", 9)
+        layout = Layout(schema)
+
+        # test inserted records
+        table_scan = TableScan(tx, "T", layout)
+        inserted_recoreds = {}
+        for _ in range(50):
+            table_scan.insert()
+            int_value = round(random.random() * 50)
+            string_value = f"rec{int_value}"
+            table_scan.set_int("A", int_value)
+            table_scan.set_string("B", string_value)
+            inserted_recoreds[str(table_scan.get_rid())] = (int_value, string_value)
+        table_scan.before_first()
+        while table_scan.next():
+            int_value, string_value = inserted_recoreds[str(table_scan.get_rid())]
+            self.assertEqual(table_scan.get_int("A"), int_value)
+            self.assertEqual(table_scan.get_string("B"), string_value)
+
+        # test delete records less than 25
+        table_scan.before_first()
+        while table_scan.next():
+            int_value = table_scan.get_int("A")
+            string_value = table_scan.get_string("B")
+            if int_value < 25:
+                table_scan.delete()
+        table_scan.before_first()
+        while table_scan.next():
+            int_value, string_value = inserted_recoreds[str(table_scan.get_rid())]
+            self.assertGreaterEqual(int_value, 25)
+
+        table_scan.close()
         tx.commit()
 
     def tearDown(self) -> None:
