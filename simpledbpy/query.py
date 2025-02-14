@@ -1,6 +1,10 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
+from simpledbpy.file import BlockId
+from simpledbpy.record import Layout, RecordPage, Types
+from simpledbpy.tx.transaction import Transaction
+
 
 class RID:
     """An identifier for a record within a file.
@@ -255,3 +259,110 @@ class UpdateScan(Scan):
         """
 
         raise NotImplementedError
+
+
+class TableScan(UpdateScan):
+    _tx: Transaction
+    _layout: Layout
+    _file_name: str
+    _current_slot: int
+    _record_page: Optional[RecordPage]
+
+    def __init__(self, tx: Transaction, table_name: str, layout: Layout) -> None:
+        self._tx = tx
+        self._layout = layout
+        self._file_name = table_name + ".tbl"
+        self._record_page = None
+        if tx.size(self._file_name) == 0:
+            self._move_to_new_block()
+        else:
+            self._move_to_block(0)
+
+    def before_first(self) -> None:
+        self._move_to_block(0)
+
+    def next(self) -> bool:
+        assert self._record_page is not None
+        self._current_slot = self._record_page.next_after(self._current_slot)
+        while self._current_slot < 0:
+            if self._at_last_block():
+                return False
+            self._move_to_block(self._record_page.block_id.block_number + 1)
+            self._current_slot = self._record_page.next_after(self._current_slot)
+        return True
+
+    def get_int(self, field_name: str) -> int:
+        assert self._record_page is not None
+        return self._record_page.get_int(self._current_slot, field_name)
+
+    def get_string(self, field_name: str) -> str:
+        assert self._record_page is not None
+        return self._record_page.get_string(self._current_slot, field_name)
+
+    def get_val(self, field_name: str) -> Constant:
+        if self._layout.schema.type(field_name) == Types.INTEGER:
+            return Constant(self.get_int(field_name))
+        else:
+            return Constant(self.get_string(field_name))
+
+    def has_field(self, field_name: str) -> bool:
+        return self._layout.schema.has_field(field_name)
+
+    def close(self) -> None:
+        if self._record_page is not None:
+            self._tx.unpin(self._record_page.block_id)
+
+    def set_int(self, field_name: str, value: int) -> None:
+        assert self._record_page is not None
+        self._record_page.set_int(self._current_slot, field_name, value)
+
+    def set_string(self, field_name: str, value: str) -> None:
+        assert self._record_page is not None
+        self._record_page.set_string(self._current_slot, field_name, value)
+
+    def set_value(self, field_name: str, val: Constant) -> None:
+        if self._layout.schema.type(field_name) == Types.INTEGER:
+            self.set_int(field_name, val.as_int())
+        else:
+            self.set_string(field_name, val.as_string())
+
+    def insert(self) -> None:
+        assert self._record_page is not None
+        self._current_slot = self._record_page.insert_after(self._current_slot)
+        while self._current_slot < 0:
+            if self._at_last_block():
+                self._move_to_new_block()
+            else:
+                self._move_to_block(self._record_page.block_id.block_number + 1)
+            self._current_slot = self._record_page.insert_after(self._current_slot)
+
+    def delete(self) -> None:
+        assert self._record_page is not None
+        self._record_page.delete(self._current_slot)
+
+    def move_to_rid(self, rid: RID) -> None:
+        self.close()
+        block_id = BlockId(self._file_name, rid.block_number)
+        self._record_page = RecordPage(self._tx, block_id, self._layout)
+        self._current_slot = rid.slot
+
+    def get_rid(self) -> RID:
+        assert self._record_page is not None
+        return RID(self._record_page.block_id.block_number, self._current_slot)
+
+    def _move_to_block(self, block_number: int) -> None:
+        self.close()
+        block_id = BlockId(self._file_name, block_number)
+        self._record_page = RecordPage(self._tx, block_id, self._layout)
+        self._current_slot = -1
+
+    def _move_to_new_block(self) -> None:
+        self.close()
+        block_id = self._tx.append(self._file_name)
+        self._record_page = RecordPage(self._tx, block_id, self._layout)
+        self._record_page.format()
+        self._current_slot = -1
+
+    def _at_last_block(self) -> bool:
+        assert self._record_page is not None
+        return self._record_page.block_id.block_number == self._tx.size(self._file_name) - 1
