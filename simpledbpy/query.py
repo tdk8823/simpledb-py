@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from abc import ABC, abstractmethod
 from typing import Optional
 
@@ -366,3 +368,103 @@ class TableScan(UpdateScan):
     def _at_last_block(self) -> bool:
         assert self._record_page is not None
         return self._record_page.block_id.block_number == self._tx.size(self._file_name) - 1
+
+
+class ProductScan(Scan):
+    """The scan class corresponding to the <i>product</i> relational algebra operator."""
+
+    _scan1: Scan
+    _scan2: Scan
+
+    def __init__(self, scan1: Scan, scan2: Scan) -> None:
+        """Create a product scan having the two underlying scans.
+
+        Args:
+            scan1 (Scan): the LHS scan
+            scan2 (Scan): the RHS scan
+        """
+        self._scan1 = scan1
+        self._scan2 = scan2
+        self.before_first()
+
+    def before_first(self) -> None:
+        """Position the scan before its first record. In particular, the LHS scan is positioned at its first record,
+        and the RHS scan is positioned before its first record.
+        """
+        self._scan1.before_first()
+        self._scan1.next()
+        self._scan2.before_first()
+
+    def next(self) -> bool:
+        """Move the scan to the next record. The method moves to the next RHS record, if possible. Otherwise, it moves
+        to the next LHS record and the first RHS record. If there are no more LHS records, the method returns false.
+
+        Returns:
+            bool: True if there is anoter record in the LHS scan
+        """
+        if self._scan2.next():
+            return True
+        else:
+            self._scan2.before_first()
+            return self._scan1.next() and self._scan2.next()
+
+    def get_int(self, field_name: str) -> int:
+        """Return the integer value of the specified field.
+        The value is obtained from whichever scan contains the field.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            int: the field's integer value
+        """
+        if self._scan1.has_field(field_name):
+            return self._scan1.get_int(field_name)
+        else:
+            return self._scan2.get_int(field_name)
+
+    def get_string(self, field_name: str) -> str:
+        """Return the string value of the specified field.
+        The value is obtained from whichever scan contains the field.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            str: the field's string value
+        """
+        if self._scan1.has_field(field_name):
+            return self._scan1.get_string(field_name)
+        else:
+            return self._scan2.get_string(field_name)
+
+    def get_val(self, field_name: str) -> Constant:
+        """Return the value of the specified field.
+        The value is obtained from whichever scan contains the field.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            Constant: the field's value
+        """
+        if self._scan1.has_field(field_name):
+            return self._scan1.get_val(field_name)
+        else:
+            return self._scan2.get_val(field_name)
+
+    def has_field(self, field_name: str) -> bool:
+        """Returns True if the specified field is in either of the underlying scans.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            bool: True if the field is in either scan
+        """
+        return self._scan1.has_field(field_name) or self._scan2.has_field(field_name)
+
+    def close(self) -> None:
+        """Close both underlying scans."""
+        self._scan1.close()
+        self._scan2.close()
