@@ -1,11 +1,14 @@
 from __future__ import annotations
 
 from abc import ABC, abstractmethod
-from typing import Optional
+from typing import TYPE_CHECKING, List, Optional
 
 from simpledbpy.file import BlockId
-from simpledbpy.record import Layout, RecordPage, Types
+from simpledbpy.record import Layout, RecordPage, Schema, Types
 from simpledbpy.tx.transaction import Transaction
+
+if TYPE_CHECKING:
+    from simpledbpy.plan import Plan
 
 
 class RID:
@@ -468,3 +471,443 @@ class ProductScan(Scan):
         """Close both underlying scans."""
         self._scan1.close()
         self._scan2.close()
+
+
+class Expression:
+    _val: Optional[Constant]
+    _field_name: Optional[str]
+
+    def __init__(self, val: Constant | str) -> None:
+        if isinstance(val, Constant):
+            self._val = val
+            self._field_name = None
+        elif isinstance(val, str):
+            self._field_name = val
+            self._val = None
+        else:
+            raise ValueError("Invalid value")
+
+    def evaluate(self, scan: Scan) -> Constant:
+        """Evaluate the expression with respect to the current record of the specified scan.
+
+        Args:
+            scan (Scan): the stan
+
+        Returns:
+            Constant: the value of the expression, as a Constant
+        """
+        if self._val is not None:
+            return self._val
+        else:
+            assert self._field_name is not None
+            return scan.get_val(self._field_name)
+
+    def is_field_name(self) -> bool:
+        """Return true if the expression is a field reference.
+
+        Returns:
+            bool: True if the expression denotes a field
+        """
+        return self._field_name is not None
+
+    def as_constant(self) -> Constant:
+        """Return the constant corresponding to a constant expression,
+        or null if the expression does not denote a constant.
+
+        Returns:
+            str: the expression as a constant
+        """
+        assert self._val is not None
+        return self._val
+
+    def as_field_name(self) -> str:
+        """Return the field name corresponding to a constant expression,
+        or null if the expression does not denote a field.
+
+        Returns:
+            str: the expression as a field name
+        """
+        assert self._field_name is not None
+        return self._field_name
+
+    def applies_to(self, schema: Schema) -> bool:
+        """Determine if all of the fields mentioned in this expression are contained in the specified schema.
+
+        Args:
+            schema (Schema): the schema
+
+        Returns:
+            bool: True is all field in the expression are in the schema
+        """
+        if self._val is not None:
+            return True
+        assert self._field_name is not None
+        return schema.has_field(self._field_name)
+
+    def __str__(self) -> str:
+        if self._val is not None:
+            return str(self._val)
+        else:
+            assert self._field_name is not None
+            return self._field_name
+
+
+class Term:
+    """A term is a comparison between two expressions."""
+
+    _lhs: Expression
+    _rhs: Expression
+
+    def __init__(self, lhs: Expression, rhs: Expression) -> None:
+        """Create a new term that compares two expressions for equality.
+
+        Args:
+            lhs (Expression): the LHS expression
+            rhs (Expression): the RHS expression
+        """
+        self._lhs = lhs
+        self._rhs = rhs
+
+    def is_satisfied(self, scan: Scan) -> bool:
+        """Return true if both of the term's expressions evaluate to the same constant,
+        with respect to the specified scan.
+
+        Args:
+            scan (Scan): the scan
+
+        Returns:
+            bool: True if both expressions have the same value in the scan
+        """
+        lhs_val = self._lhs.evaluate(scan)
+        rhs_val = self._rhs.evaluate(scan)
+        return lhs_val == rhs_val
+
+    def reduction_factor(self, plan: Plan) -> int:
+        """Calculate the extent to which selecting on the term reduces the number of records output by a query.
+        For example if the reduction factor is 2, then the term cuts the size of the output in half.
+
+        Args:
+            plan (Plan): the query's plan
+
+        Returns:
+            int: the integer reduction factor
+        """
+        if self._lhs.is_field_name() and self._rhs.is_field_name():
+            lhs_name = self._lhs.as_field_name()
+            rhs_name = self._rhs.as_field_name()
+            return max(plan.distinct_values(lhs_name), plan.distinct_values(rhs_name))
+        if self._lhs.is_field_name():
+            lhs_name = self._lhs.as_field_name()
+            return plan.distinct_values(lhs_name)
+        if self._rhs.is_field_name():
+            rhs_name = self._rhs.as_field_name()
+            return plan.distinct_values(rhs_name)
+        if self._lhs.as_constant() == self._rhs.as_constant():
+            return 1
+        else:
+            # return Integer.MAX_VALUE
+            return 2147483647
+
+    def equal_with_constant(self, field_name: str) -> Optional[Constant]:
+        """Determine if this term is of the form "F=c" where F is the specified field and c is some constant.
+        If so, the method returns that constant. If not, the method returns null.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            Optional[Constant]: either the constant or None
+        """
+        if self._lhs.is_field_name() and self._lhs.as_field_name() == field_name and not self._rhs.is_field_name():
+            return self._rhs.as_constant()
+        elif self._rhs.is_field_name() and self._rhs.as_field_name() == field_name and not self._lhs.is_field_name():
+            return self._lhs.as_constant()
+        return None
+
+    def equal_with_field(self, field_name: str) -> Optional[str]:
+        """Determine if this term is of the form "F1=F2" where F1 is the specified field and F2 is another field.
+        If so, the method returns the name of that field. If not, the method returns null.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            Optional[str]: either the field name or None
+        """
+        if self._lhs.is_field_name() and self._lhs.as_field_name() == field_name and self._rhs.is_field_name():
+            return self._rhs.as_field_name()
+        elif self._rhs.is_field_name() and self._rhs.as_field_name() == field_name and self._lhs.is_field_name():
+            return self._lhs.as_field_name()
+        else:
+            return None
+
+    def applies_to(self, schema: Schema) -> bool:
+        """Return true if both of the term's expressions apply to the specified schema.
+
+        Args:
+            schema (Schema): the schema
+
+        Returns:
+            bool: True if both expressions apply to the schema
+        """
+        return self._lhs.applies_to(schema) and self._rhs.applies_to(schema)
+
+    def __str__(self) -> str:
+        return f"{self._lhs} = {self._rhs}"
+
+
+class Predicate:
+    """A predicate is a Boolean combination of terms."""
+
+    _terms: List[Term]
+
+    def __init__(self, term: Optional[Term] = None) -> None:
+        """Create a predicate containing a single term.
+
+        Args:
+            term (Term): the term
+        """
+        self._terms = []
+        if term is not None:
+            self._terms.append(term)
+
+    def conjoin_with(self, predication: "Predicate") -> None:
+        """Modifies the predicate to be the conjunction of itself and the specified predicate.
+        Args:
+            predication (Predicate): the other predicate
+        """
+        self._terms.extend(predication._terms)
+
+    def is_satisfied(self, scan: Scan) -> bool:
+        """Returns true if the predicate evaluates to true with respect to the specified scan.
+
+        Args:
+            scan (Scan): the scan
+
+        Returns:
+            bool: True if the predicate is True in the scan
+        """
+        for term in self._terms:
+            if not term.is_satisfied(scan):
+                return False
+        return True
+
+    def reduction_factor(self, plan: Plan) -> int:
+        """Calculate the extent to which selecting on the predicate reduces the number of records output by a query.
+        For example if the reduction factor is 2, then the predicate cuts the size of the output in half.
+
+        Args:
+            plan (Plan): the query's plan
+
+        Returns:
+            int: the integer reduction factor
+        """
+        factor = 1
+        for term in self._terms:
+            factor *= term.reduction_factor(plan)
+        return factor
+
+    def select_sub_predicate(self, schema: Schema) -> Optional["Predicate"]:
+        """Return the subpredicate that applies to the specified schema.
+
+        Args:
+            schema (Schema): the schema
+
+        Returns:
+            Predicate: the subpredicate applying to the schema
+        """
+        result = Predicate()
+        for term in self._terms:
+            if term.applies_to(schema):
+                result._terms.append(term)
+        if len(result._terms) == 0:
+            return None
+        return result
+
+    def join_sub_predicate(self, schema1: Schema, schema2: Schema) -> Optional["Predicate"]:
+        """Return the subpredicate consisting of terms that apply to the union of the two specified schemas,
+        but not to either schema separately.
+
+        Args:
+            schema1 (Schema): the first schema
+            schema2 (Schema): the second schema
+
+        Returns:
+            the subpredicate whose terms apply to the union of two schemas but not either schema separately
+        """
+        result = Predicate()
+        new_schema = Schema()
+        new_schema.add_all(schema1)
+        new_schema.add_all(schema2)
+        for term in self._terms:
+            if not term.applies_to(schema1) and not term.applies_to(schema2) and term.applies_to(new_schema):
+                result._terms.append(term)
+        if len(result._terms) == 0:
+            return None
+        return result
+
+    def equal_with_constant(self, field_name: str) -> Optional[Constant]:
+        """Determine if there is a term of the form "F=c" where F is the specified field and c is some constant.
+        If so, the method returns that constant. If not, the method returns null.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            Optional[Constant]: either the constant or None
+        """
+        for term in self._terms:
+            result = term.equal_with_constant(field_name)
+            if result is not None:
+                return result
+        return None
+
+    def equal_with_field(self, field_name: str) -> Optional[str]:
+        """Determine if there is a term of the form "F1=F2" where F1 is the specified field and F2 is another field.
+         If so, the method returns the name of that field. If not, the method returns null.
+
+        Args:
+            field_name (str): the name of the field
+
+        Returns:
+            Optional[str]: the name of the other field or None
+        """
+        for term in self._terms:
+            result = term.equal_with_field(field_name)
+            if result is not None:
+                return result
+        return None
+
+    def __str__(self) -> str:
+        if not self._terms:
+            return ""
+        return " and ".join(str(term) for term in self._terms)
+
+
+class SelectScan(Scan):
+    """The scan class corresponding to the <i>select</i> relational algebra operator.
+    All methods except next delegate their work to the underlying scan.
+    """
+
+    _scan: Scan
+    _predication: Predicate
+
+    def __init__(self, scan: Scan, predication: Predicate) -> None:
+        """Create a select scan having the specified underlying scan and predicate.
+
+        Args:
+            scan (Scan): the scan of the underlying query
+            predication (Predicate): the selection predicate
+        """
+        self._scan = scan
+        self._predication = predication
+
+    # Scan methods
+    def before_first(self) -> None:
+        self._scan.before_first()
+
+    def next(self) -> bool:
+        while self._scan.next():
+            if self._predication.is_satisfied(self._scan):
+                return True
+        return False
+
+    def get_int(self, field_name: str) -> int:
+        return self._scan.get_int(field_name)
+
+    def get_string(self, field_name: str) -> str:
+        return self._scan.get_string(field_name)
+
+    def get_val(self, field_name: str) -> Constant:
+        return self._scan.get_val(field_name)
+
+    def has_field(self, field_name: str) -> bool:
+        return self._scan.has_field(field_name)
+
+    def close(self) -> None:
+        self._scan.close()
+
+    # UpdateScan methods
+    def set_int(self, field_name: str, value: int) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't set values of a non-update scan")
+        self._scan.set_int(field_name, value)
+
+    def set_string(self, field_name: str, value: str) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't set values of a non-update scan")
+        self._scan.set_string(field_name, value)
+
+    def set_value(self, field_name: str, value: Constant) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't set values of a non-update scan")
+        self._scan.set_value(field_name, value)
+
+    def delete(self) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't delete records of a non-update scan")
+        self._scan.delete()
+
+    def insert(self) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't insert records of a non-update scan")
+        self._scan.insert()
+
+    def get_rid(self) -> RID:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't get RIDs of a non-update scan")
+        return self._scan.get_rid()
+
+    def move_to_rid(self, rid: RID) -> None:
+        if not isinstance(self._scan, UpdateScan):
+            raise RuntimeError("Can't move to RIDs of a non-update scan")
+        self._scan.move_to_rid(rid)
+
+
+class ProjectScan(Scan):
+    """The scan class corresponding to the <i>project</i> relational algebra operator.
+    All methods except hasField delegate their work to the underlying scan.
+    """
+
+    _scan: Scan
+    _field_list: List[str]
+
+    def __init__(self, scan: Scan, field_list: List[str]) -> None:
+        """Create a project scan having the specified underlying scan and field list.
+
+        Args:
+            scan (Scan): the underlying scan
+            field_list (List[str]): the list of field names
+        """
+        self._scan = scan
+        self._field_list = field_list
+
+    def before_first(self) -> None:
+        self._scan.before_first()
+
+    def next(self) -> bool:
+        return self._scan.next()
+
+    def get_int(self, field_name: str) -> int:
+        if self.has_field(field_name):
+            return self._scan.get_int(field_name)
+        else:
+            raise RuntimeError(f"Field {field_name} not found")
+
+    def get_string(self, field_name: str) -> str:
+        if self.has_field(field_name):
+            return self._scan.get_string(field_name)
+        else:
+            raise RuntimeError(f"Field {field_name} not found")
+
+    def get_val(self, field_name: str) -> Constant:
+        if self.has_field(field_name):
+            return self._scan.get_val(field_name)
+        else:
+            raise RuntimeError(f"Field {field_name} not found")
+
+    def has_field(self, field_name: str) -> bool:
+        return field_name in self._field_list
+
+    def close(self) -> None:
+        self._scan.close()
