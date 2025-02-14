@@ -6,7 +6,8 @@ from tempfile import TemporaryDirectory
 from simpledbpy.buffer import BufferManager
 from simpledbpy.file import FileManager
 from simpledbpy.log import LogManager
-from simpledbpy.record import Layout, RecordPage, Schema, TableScan
+from simpledbpy.query import TableScan
+from simpledbpy.record import Layout, RecordPage, Schema
 from simpledbpy.tx.transaction import Transaction
 
 

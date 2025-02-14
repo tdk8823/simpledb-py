@@ -8,7 +8,8 @@ from simpledbpy.buffer import BufferManager
 from simpledbpy.file import FileManager
 from simpledbpy.log import LogManager
 from simpledbpy.metadata import MetadataManager
-from simpledbpy.record import Schema, TableScan, Types
+from simpledbpy.query import TableScan
+from simpledbpy.record import Schema, Types
 from simpledbpy.tx.transaction import Transaction
 
 

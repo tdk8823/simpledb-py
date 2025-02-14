@@ -1,8 +1,8 @@
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from simpledbpy.query import Constant
-from simpledbpy.record import RID, Layout, TableScan
+from simpledbpy.query import RID, Constant, TableScan
+from simpledbpy.record import Layout
 from simpledbpy.tx.transaction import Transaction
 
 
