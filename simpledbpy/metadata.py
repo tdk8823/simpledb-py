@@ -2,7 +2,8 @@ from threading import Lock
 from typing import Dict, Optional
 
 from simpledbpy.index import HashIndex, Index
-from simpledbpy.record import Layout, Schema, TableScan, Types
+from simpledbpy.query import TableScan
+from simpledbpy.record import Layout, Schema, Types
 from simpledbpy.tx.transaction import Transaction
 
 
