@@ -1,5 +1,9 @@
 import re
+from dataclasses import dataclass
 from typing import Collection, List, Optional, Tuple, Union
+
+from simpledbpy.query import Constant, Expression, Predicate, Term
+from simpledbpy.record import Schema
 
 
 class BadSyntaxException(Exception):
@@ -179,3 +183,270 @@ class Lexer:
             "index",
             "on",
         }
+
+
+class ParserData:
+    pass
+
+
+@dataclass
+class QueryData(ParserData):
+    """Data for the SQL <i>select</i> statement."""
+
+    field_names: List[str]
+    table_names: List[str]
+    predication: Predicate
+
+    def __str__(self) -> str:
+        result = "select "
+        for field in self.field_names:
+            result += field + ", "
+        result = result[:-2]  # remove last comma
+        result += " from "
+        for table in self.table_names:
+            result += table + ", "
+        result = result[:-2]  # remove last comma
+        predication_str = str(self.predication)
+        if predication_str:
+            result += " where " + predication_str
+        return result
+
+
+@dataclass
+class InsertData(ParserData):
+    table_name: str
+    field_names: List[str]
+    values: List[Constant]
+
+
+@dataclass
+class DeleteData(ParserData):
+    table_name: str
+    predication: Predicate
+
+
+@dataclass
+class ModifyData(ParserData):
+    table_name: str
+    field_name: str
+    new_value: Expression
+    predication: Predicate
+
+
+@dataclass
+class CreateTableData(ParserData):
+    table_name: str
+    schema: Schema
+
+
+@dataclass
+class CreateIndexData(ParserData):
+    index_name: str
+    table_name: str
+    field_name: str
+
+
+@dataclass
+class CraeteViewData(ParserData):
+    view_name: str
+    query_data: QueryData
+
+
+class Parser:
+    """The SimpleDB parser"""
+
+    _lexer: Lexer
+
+    def __init__(self, sql: str) -> None:
+        self._lexer = Lexer(sql)
+
+    # Methods for parsing predicates, terms, expressions, constants, and fields
+
+    def field(self) -> str:
+        return self._lexer.eat_id()
+
+    def constant(self) -> Constant:
+        if self._lexer.match_string_constant():
+            return Constant(self._lexer.eat_string_constant())
+        else:
+            return Constant(self._lexer.eat_int_constant())
+
+    def expression(self) -> Expression:
+        if self._lexer.match_id():
+            return Expression(self.field())
+        else:
+            return Expression(self.constant())
+
+    def term(self) -> Term:
+        lhs = self.expression()
+        self._lexer.eat_delim("=")
+        rhs = self.expression()
+        return Term(lhs, rhs)
+
+    def predicate(self) -> Predicate:
+        term = self.term()
+        predication = Predicate(term)
+        if self._lexer.match_keyword("and"):
+            self._lexer.eat_keyword("and")
+            predication.conjoin_with(self.predicate())
+        return predication
+
+    # Methods for parsing queries
+
+    def query(self) -> QueryData:
+        self._lexer.eat_keyword("select")
+        fields = self._select_list()
+        self._lexer.eat_keyword("from")
+        tables = self._table_list()
+        predication = Predicate()
+        if self._lexer.match_keyword("where"):
+            self._lexer.eat_keyword("where")
+            predication = self.predicate()
+        return QueryData(fields, tables, predication)
+
+    def _select_list(self) -> List[str]:
+        fields: List[str] = []
+        fields.append(self.field())
+        while self._lexer.match_delim(","):
+            self._lexer.eat_delim(",")
+            fields.append(self.field())
+        return fields
+
+    def _table_list(self) -> List[str]:
+        tables: List[str] = []
+        tables.append(self._lexer.eat_id())
+        while self._lexer.match_delim(","):
+            self._lexer.eat_delim(",")
+            tables.append(self._lexer.eat_id())
+        return tables
+
+    # methods for parsing the various update commands
+
+    def update_command(self) -> ParserData:
+        if self._lexer.match_keyword("insert"):
+            return self.insert()
+        elif self._lexer.match_keyword("delete"):
+            return self.delete()
+        elif self._lexer.match_keyword("update"):
+            return self.modify()
+        else:
+            return self._create()
+
+    def _create(self) -> ParserData:
+        self._lexer.eat_keyword("create")
+        if self._lexer.match_keyword("table"):
+            return self.create_table()
+        elif self._lexer.match_keyword("view"):
+            return self.create_view()
+        else:
+            return self.create_index()
+
+    def delete(self) -> DeleteData:
+        """Method for parsing delete commands"""
+        self._lexer.eat_keyword("delete")
+        self._lexer.eat_keyword("from")
+        table_name = self._lexer.eat_id()
+        predication = Predicate()
+        if self._lexer.match_keyword("where"):
+            self._lexer.eat_keyword("where")
+            predication = self.predicate()
+        return DeleteData(table_name, predication)
+
+    # Methods for parsing insert commands.
+
+    def insert(self) -> InsertData:
+        self._lexer.eat_keyword("insert")
+        self._lexer.eat_keyword("into")
+        table_name = self._lexer.eat_id()
+        self._lexer.eat_delim("(")
+        field_names = self._field_list()
+        self._lexer.eat_delim(")")
+        self._lexer.eat_keyword("values")
+        self._lexer.eat_delim("(")
+        values = self._constant_list()
+        self._lexer.eat_delim(")")
+        return InsertData(table_name, field_names, values)
+
+    def _field_list(self) -> List[str]:
+        fields: List[str] = []
+        fields.append(self.field())
+        while self._lexer.match_delim(","):
+            self._lexer.eat_delim(",")
+            fields.append(self.field())
+        return fields
+
+    def _constant_list(self) -> List[Constant]:
+        constants: List[Constant] = []
+        constants.append(self.constant())
+        while self._lexer.match_delim(","):
+            self._lexer.eat_delim(",")
+            constants.append(self.constant())
+        return constants
+
+    def modify(self) -> ModifyData:
+        """Method for parsing modify commands."""
+        self._lexer.eat_keyword("update")
+        table_name = self._lexer.eat_id()
+        self._lexer.eat_keyword("set")
+        field_name = self.field()
+        self._lexer.eat_delim("=")
+        new_value = self.expression()
+        predication = Predicate()
+        if self._lexer.match_keyword("where"):
+            self._lexer.eat_keyword("where")
+            predication = self.predicate()
+        return ModifyData(table_name, field_name, new_value, predication)
+
+    # method for parsing create table commands
+
+    def create_table(self) -> CreateTableData:
+        self._lexer.eat_keyword("table")
+        table_name = self._lexer.eat_id()
+        self._lexer.eat_delim("(")
+        schema = self._field_defs()
+        self._lexer.eat_delim(")")
+        return CreateTableData(table_name, schema)
+
+    def _field_defs(self) -> Schema:
+        schema = self._field_def()
+        while self._lexer.match_delim(","):
+            self._lexer.eat_delim(",")
+            schema_to_add = self._field_defs()
+            schema.add_all(schema_to_add)
+        return schema
+
+    def _field_def(self) -> Schema:
+        field_name = self.field()
+        return self._field_type(field_name)
+
+    def _field_type(self, field_name: str) -> Schema:
+        schema = Schema()
+        if self._lexer.match_keyword("int"):
+            self._lexer.eat_keyword("int")
+            schema.add_int_field(field_name)
+        else:
+            self._lexer.eat_keyword("varchar")
+            self._lexer.eat_delim("(")
+            str_len = self._lexer.eat_int_constant()
+            self._lexer.eat_delim(")")
+            schema.add_string_field(field_name, str_len)
+        return schema
+
+    def create_view(self) -> CraeteViewData:
+        """Method for parsing create view commands."""
+        self._lexer.eat_keyword("view")
+        view_name = self._lexer.eat_id()
+        self._lexer.eat_keyword("as")
+        query_data = self.query()
+        return CraeteViewData(view_name, query_data)
+
+    def create_index(self) -> CreateIndexData:
+        """Method for parsing create index commands."""
+        self._lexer.eat_keyword("index")
+        index_name = self._lexer.eat_id()
+        self._lexer.eat_keyword("on")
+        table_name = self._lexer.eat_id()
+        self._lexer.eat_delim("(")
+        field_name = self.field()
+        self._lexer.eat_delim(")")
+        return CreateIndexData(index_name, table_name, field_name)
