@@ -126,6 +126,11 @@ class Schema:
         assert field_info is not None
         return field_info.length
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Schema):
+            return False
+        return self._fields == other._fields and self._info == other._info
+
 
 class Layout:
     """Description of the structure of a record.
