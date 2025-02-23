@@ -541,6 +541,7 @@ class BasicUpdatePlanner(UpdatePlanner):
         update_scan.insert()
         for field_name, value in zip(insert_data.field_names, insert_data.values):
             update_scan.set_value(field_name, value)
+        update_scan.close()
         return 1
 
     def execute_create_table(self, create_table_data: CreateTableData, tx: Transaction) -> int:

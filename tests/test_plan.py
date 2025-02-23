@@ -7,7 +7,15 @@ from simpledbpy.buffer import BufferManager
 from simpledbpy.file import FileManager
 from simpledbpy.log import LogManager
 from simpledbpy.metadata import MetadataManager
-from simpledbpy.plan import BasicQueryPlanner, BasicUpdatePlanner, Planner, ProjectPlan, SelectPlan, TablePlan
+from simpledbpy.plan import (
+    BasicQueryPlanner,
+    BasicUpdatePlanner,
+    Planner,
+    ProductPlan,
+    ProjectPlan,
+    SelectPlan,
+    TablePlan,
+)
 from simpledbpy.query import Constant, Expression, Predicate, TableScan, Term
 from simpledbpy.record import Layout, Schema
 from simpledbpy.tx.transaction import Transaction
@@ -27,19 +35,17 @@ class TestRecordPage(unittest.TestCase):
         self.metadata_manager = MetadataManager(is_new=True, tx=tx)
         tx.commit()
 
-        self._create_student_table()
-
-    def test_planner(self) -> None:
+    def test_planner1(self) -> None:
         tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
         query_planner = BasicQueryPlanner(self.metadata_manager)
         update_planner = BasicUpdatePlanner(self.metadata_manager)
         planner = Planner(query_planner, update_planner)
+
         query = "create table T1(A int, B varchar(9))"
         planner.execute_update(query, tx)
 
         n = 200
         for _ in range(n):
-            print(_)
             int_value = round(random.random() * 50)
             string_value = f"rec{int_value}"
             query = f"insert into T1(A, B) values({int_value}, '{string_value}')"
@@ -49,43 +55,105 @@ class TestRecordPage(unittest.TestCase):
         plan = planner.create_query_plan(query, tx)
         scan = plan.open()
         while scan.next():
-            print(scan.get_string("B"))
             self.assertEqual(scan.get_string("B"), "rec10")
         scan.close()
 
         tx.commit()
 
-    # def test_single_table_plan(self) -> None:
-    #     tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+    def test_planner2(self) -> None:
+        tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+        query_planner = BasicQueryPlanner(self.metadata_manager)
+        update_planner = BasicUpdatePlanner(self.metadata_manager)
+        planner = Planner(query_planner, update_planner)
 
-    #     # the STUDENT node
-    #     plan1 = TablePlan(tx, "student", self.metadata_manager)
-    #     self.assertEqual(9, plan1.records_output())
-    #     self.assertEqual(1, plan1.blocks_accessed())
+        query = "create table T1(A int, B varchar(9))"
+        planner.execute_update(query, tx)
 
-    #     # the Select node for "major = 10"
-    #     term = Term(Expression("MajorId"), Expression(Constant(10)))
-    #     predication = Predicate(term)
-    #     plan2 = SelectPlan(plan1, predication)
+        n = 5
+        for i in range(n):
+            int_value = i
+            string_value = f"bbb{int_value}"
+            query = f"insert into T1(A, B) values({int_value}, '{string_value}')"
+            planner.execute_update(query, tx)
 
-    #     # the Select node for "GradYear = 2022"
-    #     term = Term(Expression("GradYear"), Expression(Constant(2022)))
-    #     predication = Predicate(term)
-    #     plan3 = SelectPlan(plan2, predication)
+        query = "create table T2(C int, D varchar(9))"
+        planner.execute_update(query, tx)
 
-    #     # the Project node
-    #     fields = ["SName", "MajorId", "GradYear"]
-    #     plan4 = ProjectPlan(plan3, fields)
-    #     self.assertEqual(plan3.blocks_accessed(), plan4.blocks_accessed())
-    #     self.assertEqual(plan3.records_output(), plan4.records_output())
+        for i in range(n):
+            int_value = n - i - 1
+            string_value = f"ddd{int_value}"
+            query = f"insert into T2(C, D) values({int_value}, '{string_value}')"
+            planner.execute_update(query, tx)
 
-    #     scan2 = plan2.open()
-    #     while scan2.next():
-    #         self.assertEqual(10, scan2.get_int("MajorId"))
+        query = "select B, D from T1, T2 where A = C"
+        plan = planner.create_query_plan(query, tx)
+        scan = plan.open()
+        while scan.next():
+            self.assertEqual(scan.get_string("B")[3:], scan.get_string("D")[3:])
 
-    #     scan4 = plan4.open()
-    #     while scan4.next():
-    #         self.assertRaises(RuntimeError, scan4.get_int, "SId")
+        scan.close()
+
+        tx.commit()
+
+    def test_single_table_plan(self) -> None:
+        self._create_student_table()
+
+        tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+
+        # the STUDENT node
+        plan1 = TablePlan(tx, "student", self.metadata_manager)
+        self.assertEqual(9, plan1.records_output())
+        self.assertEqual(1, plan1.blocks_accessed())
+
+        # the Select node for "major = 10"
+        term = Term(Expression("MajorId"), Expression(Constant(10)))
+        predication = Predicate(term)
+        plan2 = SelectPlan(plan1, predication)
+
+        # the Select node for "GradYear = 2022"
+        term = Term(Expression("GradYear"), Expression(Constant(2022)))
+        predication = Predicate(term)
+        plan3 = SelectPlan(plan2, predication)
+
+        # the Project node
+        fields = ["SName", "MajorId", "GradYear"]
+        plan4 = ProjectPlan(plan3, fields)
+        self.assertEqual(plan3.blocks_accessed(), plan4.blocks_accessed())
+        self.assertEqual(plan3.records_output(), plan4.records_output())
+
+        scan2 = plan2.open()
+        while scan2.next():
+            self.assertEqual(10, scan2.get_int("MajorId"))
+
+        scan4 = plan4.open()
+        while scan4.next():
+            self.assertRaises(RuntimeError, scan4.get_int, "SId")
+        scan4.close()
+
+        tx.commit()
+
+    def test_multi_table_plan(self) -> None:
+        self._create_student_table()
+        self._create_dept_table()
+
+        tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+
+        plan1 = TablePlan(tx, "student", self.metadata_manager)
+        plan2 = TablePlan(tx, "dept", self.metadata_manager)
+        plan3 = ProductPlan(plan1, plan2)
+
+        term = Term(Expression("MajorId"), Expression("DId"))
+        predication = Predicate(term)
+        plan4 = SelectPlan(plan3, predication)
+
+        self.assertEqual(plan1.records_output() * plan2.records_output(), plan3.records_output())
+
+        scan = plan4.open()
+        while scan.next():
+            self.assertEqual(scan.get_int("MajorId"), scan.get_int("DId"))
+        scan.close()
+
+        tx.commit()
 
     def tearDown(self) -> None:
         self.tmp_dir.cleanup()
@@ -121,22 +189,22 @@ class TestRecordPage(unittest.TestCase):
         table_scan.close()
         tx.commit()
 
-    # def _create_dept_table(self) -> None:
-    #     schema = Schema()
-    #     schema.add_int_field("DId")
-    #     schema.add_string_field("DName", 8)
-    #     layout = Layout(schema)
-    #     tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
-    #     self.metadata_manager.create_table("dept", schema, tx)
-    #     table_scan = TableScan(tx, "dept", layout)
-    #     records = [
-    #         (10, "compsci"),
-    #         (20, "math"),
-    #         (30, "drama"),
-    #     ]
-    #     for record in records:
-    #         table_scan.insert()
-    #         table_scan.set_int("DId", record[0])
-    #         table_scan.set_string("DName", record[1])
-    #     table_scan.close()
-    #     tx.commit()
+    def _create_dept_table(self) -> None:
+        schema = Schema()
+        schema.add_int_field("DId")
+        schema.add_string_field("DName", 8)
+        layout = Layout(schema)
+        tx = Transaction(self.file_manager, self.log_manager, self.buffer_manager)
+        self.metadata_manager.create_table("dept", schema, tx)
+        table_scan = TableScan(tx, "dept", layout)
+        records = [
+            (10, "compsci"),
+            (20, "math"),
+            (30, "drama"),
+        ]
+        for record in records:
+            table_scan.insert()
+            table_scan.set_int("DId", record[0])
+            table_scan.set_string("DName", record[1])
+        table_scan.close()
+        tx.commit()
