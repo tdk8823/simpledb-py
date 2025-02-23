@@ -171,7 +171,8 @@ class StatManager:
         self._table_stats = {}
         self._num_calls = 0
         self._lock = Lock()
-        self._refresh_statistics(tx)
+        with self._lock:
+            self._refresh_statistics(tx)
 
     def get_stat_info(self, table_name: str, layout: Layout, tx: Transaction) -> StatInfo:
         """Return the statistical information about the specified table.
@@ -195,16 +196,15 @@ class StatManager:
             return stat_info
 
     def _refresh_statistics(self, tx: Transaction) -> None:
-        with self._lock:
-            table_stats = {}
-            table_catalog_layout = self._table_manager.get_layout("table_catalog", tx)
-            table_catalog = TableScan(tx, "table_catalog", table_catalog_layout)
-            while table_catalog.next():
-                table_name = table_catalog.get_string("tablename")
-                layout = self._table_manager.get_layout(table_name, tx)
-                statistic_info = self._calc_table_stats(table_name, layout, tx)
-                table_stats[table_name] = statistic_info
-            table_catalog.close()
+        table_stats = {}
+        table_catalog_layout = self._table_manager.get_layout("table_catalog", tx)
+        table_catalog = TableScan(tx, "table_catalog", table_catalog_layout)
+        while table_catalog.next():
+            table_name = table_catalog.get_string("tablename")
+            layout = self._table_manager.get_layout(table_name, tx)
+            statistic_info = self._calc_table_stats(table_name, layout, tx)
+            table_stats[table_name] = statistic_info
+        table_catalog.close()
 
     def _calc_table_stats(self, table_name: str, layout: Layout, tx: Transaction) -> StatInfo:
         num_records = 0
