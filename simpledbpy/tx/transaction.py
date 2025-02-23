@@ -53,7 +53,7 @@ class BufferList:
         """
         buffer = self._buffers.get(block_id)
         if buffer is not None:
-            buffer.unpin()
+            self._buffer_manager.unpin(buffer)
             self._pins.remove(block_id)
             if block_id not in self._pins:
                 del self._buffers[block_id]
